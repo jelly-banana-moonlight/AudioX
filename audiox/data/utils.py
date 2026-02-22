@@ -1,3 +1,4 @@
+from safetensors.torch import load_file
 import math
 import random
 import torch

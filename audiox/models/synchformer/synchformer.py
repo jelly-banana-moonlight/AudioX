@@ -1,3 +1,4 @@
+from safetensors.torch import load_file
 import logging
 from typing import Any, Mapping
 
@@ -42,7 +43,7 @@ class Synchformer(nn.Module):
 
 if __name__ == "__main__":
     model = Synchformer().cuda().eval()
-    sd = torch.load('./ext_weights/synchformer_state_dict.pth', weights_only=True)
+    sd = load_file('./ext_weights/synchformer_state_dict.pth', weights_only=True)
     model.load_state_dict(sd)
 
     vid = torch.randn(2, 7, 16, 3, 224, 224).cuda()
@@ -50,5 +51,5 @@ if __name__ == "__main__":
     print(features.shape)
 
     # extract and save the state dict only
-    # sd = torch.load('./ext_weights/sync_model_audioset.pt')['model']
+    # sd = load_file('./ext_weights/sync_model_audioset.pt')['model']
     # torch.save(sd, './ext_weights/synchformer_state_dict.pth')

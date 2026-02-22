@@ -1,3 +1,4 @@
+from safetensors.torch import load_file
 #Heavily influenced by https://github.com/facebookresearch/audiocraft/blob/main/audiocraft/modules/conditioners.py
 
 import torch
@@ -297,7 +298,7 @@ class CLIPConditioner(Conditioner):
         return video_tensor
 
     def init_first_from_ckpt(self, path):
-        model = torch.load(path, map_location="cpu")
+        model = load_file(path, device="cpu")
         if "state_dict" in list(model.keys()):
             model = model["state_dict"]
         # Remove: module prefix
@@ -410,7 +411,7 @@ class CLIPWithSyncWithEmptyFeatureConditioner(Conditioner):
         return video_tensor
 
     def init_first_from_ckpt(self, path):
-        model = torch.load(path, map_location="cpu")
+        model = load_file(path, device="cpu")
         if "state_dict" in list(model.keys()):
             model = model["state_dict"]
         new_model = {}
@@ -543,7 +544,7 @@ class T5Conditioner(Conditioner):
 
         self.model.eval()
             
-        with torch.cuda.amp.autocast(dtype=torch.float16), torch.set_grad_enabled(self.enable_grad):
+        with torch.amp.autocast('cuda', dtype=torch.float16), torch.set_grad_enabled(self.enable_grad):
             embeddings = self.model(
                 input_ids=input_ids, attention_mask=attention_mask
             )["last_hidden_state"]    

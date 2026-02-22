@@ -1,42 +1,39 @@
 import torch
 from safetensors.torch import load_file
-
 from torch.nn.utils import remove_weight_norm
 
 def load_ckpt_state_dict(ckpt_path):
+    """
+    Load the state dict from either a .safetensors or .ckpt/.pth file.
+    Safetensors are loaded directly; legacy PyTorch files are loaded via torch.load.
+    """
     if ckpt_path.endswith(".safetensors"):
-        state_dict = load_file(ckpt_path)
+        # Safetensors are usually flat dictionaries
+        state_dict = load_file(ckpt_path, device="cpu")
     else:
-        state_dict = torch.load(ckpt_path, map_location="cpu")["state_dict"]
-    
+        # Legacy .ckpt or .pth files usually have a "state_dict" key
+        raw_state = torch.load(ckpt_path, map_location="cpu", weights_only=True)
+        if isinstance(raw_state, dict) and "state_dict" in raw_state:
+            state_dict = raw_state["state_dict"]
+        else:
+            state_dict = raw_state
+            
     return state_dict
 
 def remove_weight_norm_from_model(model):
     for module in model.modules():
         if hasattr(module, "weight"):
-            print(f"Removing weight norm from {module}")
-            remove_weight_norm(module)
-
+            try:
+                remove_weight_norm(module)
+            except Exception:
+                pass 
     return model
 
-# Sampling functions copied from https://github.com/facebookresearch/audiocraft/blob/main/audiocraft/utils/utils.py under MIT license
-# License can be found in LICENSES/LICENSE_META.txt
+# Sampling functions copied from https://github.com/facebookresearch/audiocraft/blob/main/audiocraft/utils/utils.py 
+# under MIT license. License can be found in LICENSES/LICENSE_META.txt
 
 def multinomial(input: torch.Tensor, num_samples: int, replacement=False, *, generator=None):
-    """torch.multinomial with arbitrary number of dimensions, and number of candidates on the last dimension.
-
-    Args:
-        input (torch.Tensor): The input tensor containing probabilities.
-        num_samples (int): Number of samples to draw.
-        replacement (bool): Whether to draw with replacement or not.
-    Keywords args:
-        generator (torch.Generator): A pseudorandom number generator for sampling.
-    Returns:
-        torch.Tensor: Last dimension contains num_samples indices
-            sampled from the multinomial probability distribution
-            located in the last dimension of tensor input.
-    """
-
+    """torch.multinomial with arbitrary number of dimensions."""
     if num_samples == 1:
         q = torch.empty_like(input).exponential_(1, generator=generator)
         return torch.argmax(input / q, dim=-1, keepdim=True).to(torch.int64)
@@ -46,16 +43,8 @@ def multinomial(input: torch.Tensor, num_samples: int, replacement=False, *, gen
     output = output_.reshape(*list(input.shape[:-1]), -1)
     return output
 
-
 def sample_top_k(probs: torch.Tensor, k: int) -> torch.Tensor:
-    """Sample next token from top K values along the last dimension of the input probs tensor.
-
-    Args:
-        probs (torch.Tensor): Input probabilities with token candidates on the last dimension.
-        k (int): The k in “top-k”.
-    Returns:
-        torch.Tensor: Sampled tokens.
-    """
+    """Sample next token from top K values."""
     top_k_value, _ = torch.topk(probs, k, dim=-1)
     min_value_top_k = top_k_value[..., [-1]]
     probs *= (probs >= min_value_top_k).float()
@@ -63,16 +52,8 @@ def sample_top_k(probs: torch.Tensor, k: int) -> torch.Tensor:
     next_token = multinomial(probs, num_samples=1)
     return next_token
 
-
 def sample_top_p(probs: torch.Tensor, p: float) -> torch.Tensor:
-    """Sample next token from top P probabilities along the last dimension of the input probs tensor.
-
-    Args:
-        probs (torch.Tensor): Input probabilities with token candidates on the last dimension.
-        p (int): The p in “top-p”.
-    Returns:
-        torch.Tensor: Sampled tokens.
-    """
+    """Sample next token from top P probabilities."""
     probs_sort, probs_idx = torch.sort(probs, dim=-1, descending=True)
     probs_sum = torch.cumsum(probs_sort, dim=-1)
     mask = probs_sum - probs_sort > p
